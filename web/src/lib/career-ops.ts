@@ -73,6 +73,38 @@ export function readInbox(): InboxJob[] {
 }
 
 /**
+ * Mark a data/pipeline.md line `[x]` done by URL match (same positional parse
+ * as readInbox: url is the first `|`-separated field). Fixes #1610-style
+ * staleness — evaluating a job via /api/run (from the Inbox shortlist OR the
+ * homepage's paste-a-URL box) previously never touched pipeline.md, so a fully
+ * scored job kept showing up as "pending" in the Inbox tab forever, duplicated
+ * with no link to its own EVALUATED tracker row. Returns true iff a line
+ * actually flipped (so callers can skip a write when there's nothing to do —
+ * e.g. the URL was never in the inbox, or was already marked done).
+ */
+export function markPipelineDone(url: string): boolean {
+  const file = path.join(careerOpsRoot(), "data", "pipeline.md");
+  let content: string;
+  try {
+    content = fs.readFileSync(file, "utf8");
+  } catch {
+    return false;
+  }
+  let changed = false;
+  const lines = content.split("\n").map((line) => {
+    const m = line.match(/^(\s*-\s*\[)([ xX])(\]\s*)(.+)$/);
+    if (!m) return line;
+    if (m[2].toLowerCase() === "x") return line; // already done
+    const firstField = m[4].split("|")[0]?.trim();
+    if (firstField !== url) return line;
+    changed = true;
+    return `${m[1]}x${m[3]}${m[4]}`;
+  });
+  if (changed) atomicWrite(file, lines.join("\n"));
+  return changed;
+}
+
+/**
  * Read data/scan-history.tsv → Map<url, first_seen(YYYY-MM-DD)>. The scanner
  * already stamps every discovered posting with the date it was first seen
  * (col 2), so we derive the inbox's freshness signal here WITHOUT touching the

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { CompanyLogo } from "@/components/company-logo";
 import { canonStatus, scoreNum, scoreTone, statusDot } from "@/lib/format";
 import { InboxTriage } from "@/components/inbox/inbox-triage";
+import { AutoBatchPanel } from "@/components/inbox/auto-batch-panel";
 import { cn } from "@/lib/cn";
 
 // INBOX (the triage queue) is the default tab; the rest filter the tracker.
@@ -183,7 +184,10 @@ export function PipelineView({
       {tab === "INBOX" ? (
         /* ── Inbox: the triage surface (Abundance → Triage → Shortlist → Score) ── */
         pendingInbox.length > 0 ? (
-          <InboxTriage inbox={pendingInbox} />
+          <div className="mx-auto max-w-3xl">
+            <AutoBatchPanel count={pendingInbox.length} />
+            <InboxTriage inbox={pendingInbox} />
+          </div>
         ) : (
           <InboxEmpty count={0} filtered={false} />
         )

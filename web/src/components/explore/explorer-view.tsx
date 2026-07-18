@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Compass, ChevronDown, RotateCcw, AlertTriangle, Sparkles, Settings } from "lucide-react";
+import { Compass, RotateCcw, AlertTriangle, Sparkles, Settings } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { instrumentSerif } from "@/lib/fonts";
 import type { Application, InboxJob } from "@/lib/career-ops";
 import { paramsToFilters, paramsToAi, type ExploreFilters } from "@/lib/explore";
-import { FilterBuilder } from "./filter-builder";
 import { DiscoveringState } from "./discovering-state";
 import { AiHuntView } from "./ai-hunt-view";
 import { ExploreModeToggle } from "./explore-mode-toggle";
@@ -37,13 +36,12 @@ export function ExplorerView({
   appsSnapshot: Application[];
   rootExists: boolean;
 }) {
-  const { filters, setFilters, initFilters, phase, running, offers, discover, status, error, mode, setMode, aiIntent, setAiIntent, discoverAI, companiesScanned, companiesAvailable, capHit, droppedNoDate, partial } = useExplore();
+  const { initFilters, phase, running, offers, discover, status, error, mode, setMode, aiIntent, setAiIntent, discoverAI, companiesScanned, companiesAvailable, capHit, droppedNoDate, partial } = useExplore();
   const scanNote =
     companiesScanned > 0
       ? `Scanned ${companiesScanned.toLocaleString()}${companiesAvailable > companiesScanned ? ` of ${companiesAvailable.toLocaleString()}` : ""} compan${companiesScanned === 1 ? "y" : "ies"}${partial ? " · some sources were unreachable" : ""}.`
       : undefined;
   const inited = useRef(false);
-  const [refineOpen, setRefineOpen] = useState(false);
   const [cli, setCli] = useState<{ id: string | null; name?: string }>({ id: null });
   const [firstRun, setFirstRun] = useState(false);
 
@@ -97,7 +95,6 @@ export function ExplorerView({
   const isAi = mode === "ai";
   if (running) return isAi ? <AiHuntView cliName={cli.name} /> : <DiscoveringState />;
 
-  const canDiscover = filters.ats.length > 0;
   const isResults = phase === "results";
 
   return (
@@ -117,7 +114,7 @@ export function ExplorerView({
           <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted">
             {isAi
               ? "Describe the role in plain language — an AI hunts the open web for it, on your own AI. Candidates are unverified until you evaluate."
-              : "Scan the public ATS network — Greenhouse, Lever, Ashby, Workday. Fresh postings matched to you, zero tokens. You only spend when you choose to evaluate one."}
+              : "Scan Polish/EU job boards — JustJoin.it, NoFluffJobs, and more — filtered to your portals.yml (frontend/React/Next.js, Poland/EU). Zero tokens. You only spend when you choose to evaluate one."}
           </p>
         )}
       </header>
@@ -146,7 +143,7 @@ export function ExplorerView({
               <EmptyState
                 tone="loose"
                 title="No public matches — yet."
-                body="AI search reads what's public. Try broader intent, or run the free Scan over the ATS network."
+                body="AI search reads what's public. Try broader intent, or run the free Scan over Polish/EU job boards."
                 onRerun={() => setMode("scan")}
                 rerunLabel="Run the free Scan"
               />
@@ -157,23 +154,16 @@ export function ExplorerView({
       ) : (
         <>
           {isResults ? (
-            <div className="mb-6 rounded-xl border border-border bg-surface/30">
-              <button type="button" onClick={() => setRefineOpen((v) => !v)} className="flex w-full items-center gap-2 px-4 py-3 text-sm font-medium text-foreground">
-                <Compass className="size-4 text-brand" /> Refine search
-                <ChevronDown className={cn("ml-auto size-4 text-muted transition-transform", refineOpen && "rotate-180")} />
-              </button>
-              {refineOpen && (
-                <div className="space-y-4 border-t border-border p-4">
-                  <FilterBuilder filters={filters} onChange={setFilters} seededFrom={seed.seededFrom} />
-                  <DiscoverBar canDiscover={canDiscover} onDiscover={discover} label="Re-cast (free)" />
-                </div>
-              )}
+            <div className="mb-6 flex justify-end">
+              <DiscoverBar canDiscover onDiscover={discover} label="Scan again (free)" />
             </div>
           ) : (
             <div className="mb-6 rounded-2xl border border-border bg-surface/30 p-5">
-              <FilterBuilder filters={filters} onChange={setFilters} seededFrom={seed.seededFrom} />
-              <div className="mt-5">
-                <DiscoverBar canDiscover={canDiscover} onDiscover={discover} label="Discover (free)" />
+              <p className="text-[13px] leading-relaxed text-muted">
+                Roles/location filters come from your <code className="rounded bg-surface-hover px-1 py-0.5 text-[12px]">portals.yml</code> — edit it (or ask Claude) to change what counts as a match.
+              </p>
+              <div className="mt-4">
+                <DiscoverBar canDiscover onDiscover={discover} label="Scan Poland boards (free)" />
               </div>
             </div>
           )}
@@ -187,9 +177,6 @@ export function ExplorerView({
             </div>
           )}
 
-          {isResults && capHit && (
-            <CappedBanner companiesScanned={companiesScanned} companiesAvailable={companiesAvailable} onRefine={() => setRefineOpen(true)} />
-          )}
           {isResults && <ResultsList offers={enriched} />}
 
           {phase === "empty-current" && (
@@ -198,24 +185,18 @@ export function ExplorerView({
               title="You're all caught up."
               body="Nothing new since your last scan. Your pipeline is current — that's the goal."
               note={scanNote}
-              onRerun={() => {
-                setFilters({ ...filters, sinceDays: Math.max(filters.sinceDays, 30) });
-                void discover();
-              }}
-              rerunLabel="Look back 30 days"
+              onRerun={() => void discover()}
+              rerunLabel="Scan again"
             />
           )}
           {phase === "empty-loose" && (
             <EmptyState
               tone="loose"
               title="No fresh matches — yet."
-              body="Discovery is free — loosen and re-cast as often as you want."
+              body="Discovery is free — scan again anytime, or widen title_filter.positive in portals.yml to catch more roles."
               note={scanNote}
-              onRerun={() => {
-                setFilters({ ...filters, sinceDays: 30, block: [], allow: [] });
-                void discover();
-              }}
-              rerunLabel="Widen to 30 days · clear location"
+              onRerun={() => void discover()}
+              rerunLabel="Scan again"
             />
           )}
           {phase === "degraded" && (
@@ -308,22 +289,6 @@ function DegradedCard({
       <p className="mx-auto mt-1 max-w-md text-[13px] text-muted">{body}</p>
       <button onClick={onRetry} className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-brand-soft px-3 py-1.5 text-sm font-medium text-brand">
         <RotateCcw className="size-4" /> Retry the scan
-      </button>
-    </div>
-  );
-}
-
-function CappedBanner({ companiesScanned, companiesAvailable, onRefine }: { companiesScanned: number; companiesAvailable: number; onRefine: () => void }) {
-  // Results ARE present, but the scan was capped — tell the user there's more, so a
-  // partial list never reads as "everything there is".
-  return (
-    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-4 py-2.5 text-[13px]">
-      <span className="text-foreground">
-        Showing a capped slice — searched {companiesScanned.toLocaleString()}
-        {companiesAvailable > companiesScanned ? ` of ${companiesAvailable.toLocaleString()}` : ""} companies.
-      </span>
-      <button onClick={onRefine} className="font-medium text-brand hover:underline">
-        Raise scan depth to search deeper
       </button>
     </div>
   );

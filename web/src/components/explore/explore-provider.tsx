@@ -157,10 +157,8 @@ export function ExploreProvider({ children }: { children: React.ReactNode }) {
     setDroppedNoDate(0);
     setPartial(false);
     setError("");
-    setStatus("Casting the net across the ATS network…");
-    const init: Partial<Record<AtsSource, SourceState>> = {};
-    for (const a of f.ats) init[a] = { state: "queued" };
-    setSources(init);
+    setStatus("Scanning Polish/EU job boards…");
+    setSources({});
     if (typeof window !== "undefined") {
       const qs = filtersToParams(f);
       window.history.replaceState(null, "", `/explore${qs ? `?${qs}` : ""}`);
@@ -263,6 +261,11 @@ export function ExploreProvider({ children }: { children: React.ReactNode }) {
       setMatchCount(acc.length);
       setPhase("revealing");
       setStatus(`${acc.length} fresh role${acc.length === 1 ? "" : "s"} found — free.`);
+      // runPortalScan already wrote these straight into data/pipeline.md (unlike the
+      // old ATS dry-run, which required an explicit Add click) — refresh the router
+      // so the server-rendered inboxSnapshot catches up and cards show "In pipeline"
+      // instead of a stale, clickable "Add to pipeline" (disc#5-style staleness).
+      router.refresh();
       window.setTimeout(() => setPhase("results"), 850);
     } else if (sawError) {
       setError(sawError);

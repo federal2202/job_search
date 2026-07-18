@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { ApplyBackdrop } from "@/components/apply/apply-backdrop";
 import { instrumentSerif } from "@/lib/fonts";
-import { ATS_LABEL, ATS_SOURCES, type AtsSource } from "@/lib/explore";
-import { useExplore, type SourceState } from "./explore-provider";
+import { useExplore } from "./explore-provider";
 
 const STYLE = `
 .co-disc{position:relative;z-index:1;display:flex;min-height:78vh;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1.6rem;padding:2rem}
@@ -45,31 +44,8 @@ export function useCountUp(target: number): number {
   return Math.round(val);
 }
 
-function SourceChip({ ats, s }: { ats: AtsSource; s?: SourceState }) {
-  const state = s?.state ?? "queued";
-  const pct = s?.total ? Math.min(100, Math.round(((s.done ?? 0) / s.total) * 100)) : state === "swept" || state === "noisy" ? 100 : 0;
-  return (
-    <div className="co-src__chip" data-state={state === "noisy" ? "active" : state}>
-      {state === "active" ? (
-        <span className="co-src__orb" />
-      ) : state === "swept" || state === "noisy" ? (
-        <Check className="size-3.5 text-emerald-500" />
-      ) : (
-        <span className="size-2.5 rounded-full border border-current opacity-40" />
-      )}
-      <span className="text-[13px] font-medium text-foreground">{ATS_LABEL[ats]}</span>
-      <div className="ml-auto flex flex-col items-end gap-1">
-        {state === "noisy" && <span className="text-[10px] text-faint">~{s?.unreachable} skipped</span>}
-        <div className="co-src__track">
-          <div className="co-src__bar" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function DiscoveringState() {
-  const { sources, matchCount, companiesScanned, status, phase } = useExplore();
+  const { matchCount, companiesScanned, status, phase } = useExplore();
   const shown = useCountUp(matchCount);
   const companies = useCountUp(companiesScanned);
 
@@ -91,15 +67,9 @@ export function DiscoveringState() {
           </p>
         </div>
 
-        <div className="co-src">
-          {ATS_SOURCES.map((a) => (
-            <SourceChip key={a} ats={a} s={sources[a]} />
-          ))}
-        </div>
-
         <p className="flex items-center gap-2 text-[13px] text-faint">
           <Loader2 className="size-3.5 animate-spin" />
-          {status || "Casting the net across the ATS network…"}
+          {status || "Scanning Polish/EU job boards…"}
         </p>
 
         {phase !== "revealing" && (

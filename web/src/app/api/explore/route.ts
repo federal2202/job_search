@@ -1,27 +1,18 @@
-import { NextRequest } from "next/server";
 import fs from "node:fs";
-import { runDiscovery } from "@/lib/core/scan";
+import { runPortalScan } from "@/lib/core/scan";
 import { rootScript } from "@/lib/career-ops";
-import { parseExplorePatch, DEFAULT_FILTERS, type DiscoveredOffer, type ScanEvent } from "@/lib/explore";
+import type { DiscoveredOffer, ScanEvent } from "@/lib/explore";
 
-// Discovery is HTTP-bound across many ATS boards; give it room. It is FREE —
-// zero LLM tokens (the scanner only does HTTP + JSON, and --dry-run writes nothing).
+// Poland/EU board scan (scan.mjs) — zero LLM tokens (pure HTTP + JSON), writes
+// straight into data/pipeline.md from the user's curated portals.yml. No
+// per-request filters — see runPortalScan() for why.
 export const runtime = "nodejs";
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
-  let body: Record<string, unknown> = {};
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    /* empty body → defaults */
-  }
-
-  const filters = parseExplorePatch(body, DEFAULT_FILTERS);
-
+export async function POST() {
   // Guard: a data-only checkout (or pre-onboarding) has no scanner. Fail soft.
-  if (!fs.existsSync(rootScript("scan-ats-full"))) {
+  if (!fs.existsSync(rootScript("scan"))) {
     return Response.json(
       { error: "The discovery scanner isn't available in this checkout yet." },
       { status: 400 },
@@ -38,10 +29,10 @@ export async function POST(req: NextRequest) {
           /* stream closed */
         }
       };
-      send({ kind: "start", ats: filters.ats, sinceDays: filters.sinceDays, limit: filters.limitPerAts, free: true } satisfies ScanEvent);
+      send({ kind: "start", ats: ["poland"], sinceDays: 0, limit: 0, free: true } satisfies ScanEvent);
       let offers: DiscoveredOffer[] = [];
       try {
-        offers = await runDiscovery(filters, (e: ScanEvent) => send(e));
+        offers = await runPortalScan((e: ScanEvent) => send(e));
       } catch (err) {
         send({ kind: "error", message: err instanceof Error ? err.message : "discovery failed" } satisfies ScanEvent);
       }

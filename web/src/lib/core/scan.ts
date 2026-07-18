@@ -1,8 +1,85 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import { careerOpsRoot, rootScript } from "@/lib/career-ops";
+import { careerOpsRoot, rootScript, readInbox } from "@/lib/career-ops";
 import { writeTempPortals, cleanupTempPortals } from "./portals";
 import { ATS_SOURCES, type DiscoveredOffer, type ExploreFilters, type ScanEvent } from "@/lib/explore";
+
+const COMPANIES_SCANNED_RE = /Companies scanned:\s+(\d+)/;
+
+/**
+ * Poland/EU board scan — orchestrates the REAL core scanner `scan.mjs`
+ * (JustJoin.it, NoFluffJobs, Landing.jobs, Arbeitnow, The Hub, RemoteOK,
+ * Remotive, Working Nomads — whatever `tracked_companies` in the user's real
+ * portals.yml enables). Unlike the ATS reverse-scan, this runs for REAL (no
+ * --dry-run): it's the same effect as `node scan.mjs` from the CLI, writing
+ * straight into data/pipeline.md / data/scan-history.tsv / data/scan-runs.tsv
+ * through scan.mjs's own dedup + title/location/cooldown filters — always
+ * from the user's curated portals.yml, never an ephemeral per-search override
+ * (there is no per-request filter surface here, unlike the ATS scan).
+ *
+ * New offers are discovered by diffing `readInbox()` before/after — the
+ * canonical parser for data/pipeline.md — rather than scraping stdout text,
+ * so every offer carries a real URL straight from the file scan.mjs wrote.
+ */
+export function runPortalScan(onEvent: (e: ScanEvent) => void): Promise<DiscoveredOffer[]> {
+  return new Promise((resolve) => {
+    const beforeUrls = new Set(readInbox().map((j) => j.url));
+    const child = spawn(process.execPath, [rootScript("scan")], { cwd: careerOpsRoot(), env: process.env });
+
+    let companiesScanned = 0;
+    let outBuf = "";
+    let errBuf = "";
+    const killer = setTimeout(() => {
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        /* ignore */
+      }
+    }, 120_000);
+
+    const handleLine = (line: string) => {
+      onEvent({ kind: "log", line });
+      const m = line.match(COMPANIES_SCANNED_RE);
+      if (m) companiesScanned = Number(m[1]);
+    };
+
+    child.stdout.on("data", (d: Buffer) => {
+      outBuf += d.toString();
+      const parts = outBuf.split(/\r\n|\r|\n/);
+      outBuf = parts.pop() ?? "";
+      for (const p of parts) if (p.trim()) handleLine(p.trim());
+    });
+    child.stderr.on("data", (d: Buffer) => {
+      errBuf += d.toString();
+      const parts = errBuf.split(/\r\n|\r|\n/);
+      errBuf = parts.pop() ?? "";
+      for (const p of parts) if (p.trim()) onEvent({ kind: "log", line: p.trim() });
+    });
+
+    child.on("error", (e) => {
+      clearTimeout(killer);
+      onEvent({ kind: "error", message: e instanceof Error ? e.message : "scanner failed to start" });
+      resolve([]);
+    });
+    child.on("close", () => {
+      clearTimeout(killer);
+      const offers: DiscoveredOffer[] = readInbox()
+        .filter((j) => !j.done && !beforeUrls.has(j.url))
+        .map((j) => ({
+          url: j.url,
+          company: j.company,
+          title: j.role,
+          location: j.location || "",
+          postedAt: "",
+          ats: "poland",
+          source: "scan.mjs",
+        }));
+      for (const offer of offers) onEvent({ kind: "offer", offer });
+      onEvent({ kind: "summary", companiesScanned, unreachable: 0, matches: offers.length });
+      resolve(offers);
+    });
+  });
+}
 
 export type { DiscoveredOffer, ScanEvent, AtsSource } from "@/lib/explore";
 export { ATS_SOURCES } from "@/lib/explore";

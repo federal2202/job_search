@@ -11,6 +11,7 @@ import { ScoreMethodology } from "@/components/score-methodology";
 import { GeneratePdfButton } from "@/components/generate-pdf-button";
 import { ApplyButton } from "@/components/apply-button";
 import { DeleteFromTracker } from "@/components/delete-from-tracker";
+import { SkillTailorPanel } from "@/components/skill-tailor-panel";
 
 // Progressive disclosure of the report. The core writes prose blocks
 // "## F) Verdict (lead)", "## A) Role Summary", "## B) Match with CV", then
@@ -131,6 +132,8 @@ export function ReportView({
             <DeleteFromTracker n={id} />
           </div>
         )}
+
+        {report && <SkillTailorPanel n={id} company={app?.company ?? meta?.title ?? id} />}
 
         {(archetype || date || (url && url.startsWith("http"))) && (
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
